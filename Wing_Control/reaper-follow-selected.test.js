@@ -8,11 +8,18 @@ function setup() {
     const sent = []
     const received = []
     const callbacks = {}
+    const intervals = []
     const context = {
         module: {exports: {}},
         app: {on: (name, callback) => { callbacks[name] = callback }},
         send: (...args) => sent.push(args),
         receive: (...args) => received.push(args),
+        setInterval: (callback, delay) => {
+            const interval = {callback, delay, cleared: false}
+            intervals.push(interval)
+            return interval
+        },
+        clearInterval: interval => { interval.cleared = true },
         console: {warn() {}}
     }
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'reaper-follow-selected.js'), 'utf8'), context)
@@ -23,7 +30,7 @@ function setup() {
     const outgoing = (address, value = 1) => router.oscOutFilter({
         host: '127.0.0.1', port: 8000, address, args: [{value}]
     })
-    return {router, sent, received, callbacks, incoming, outgoing}
+    return {router, sent, received, callbacks, incoming, outgoing, intervals}
 }
 
 test('selecting a track maps the surface to that track and following tracks', () => {
@@ -155,4 +162,40 @@ test('the first eight knobs use normalized pan addresses', () => {
         assert.equal(knob.range.min, 0)
         assert.equal(knob.range.max, 1)
     }
+})
+
+test('smaller W-Control arrow buttons scrub while pressed', () => {
+    const layout = JSON.parse(fs.readFileSync(path.join(__dirname, 'wControl-smaller.json'), 'utf8'))
+    const widgets = layout.content.widgets[0].widgets
+    for (const [id, direction, left] of [
+        ['scrub_backward', -1, 822],
+        ['scrub_forward', 1, 904]
+    ]) {
+        const button = widgets.find(widget => widget.id === id)
+        assert.equal(button.type, 'button')
+        assert.equal(button.interaction, true)
+        assert.equal(button.address, '/scrub')
+        assert.equal(button.mode, 'push')
+        assert.equal(button.on, direction)
+        assert.equal(button.off, 0)
+        assert.ok(button.css.includes(`left: calc(var(--leftOffset) + ${left}px);`))
+        assert.ok(button.css.includes('top: calc(var(--topOffset) + 460px);'))
+    }
+})
+
+test('scrub repeats while held and stops on release or module stop', () => {
+    const {router, outgoing, sent, intervals} = setup()
+    assert.equal(outgoing('/scrub', -1).address, '/scrub')
+    assert.equal(intervals[0].delay, 50)
+    intervals[0].callback()
+    assert.deepEqual(sent[0].slice(0, 3), ['127.0.0.1', 8000, '/scrub'])
+    assert.equal(sent[0][3].type, 'f')
+    assert.equal(sent[0][3].value, -1)
+
+    outgoing('/scrub', 0)
+    assert.equal(intervals[0].cleared, true)
+    outgoing('/scrub', 1)
+    assert.equal(intervals[1].cleared, false)
+    router.stop()
+    assert.equal(intervals[1].cleared, true)
 })

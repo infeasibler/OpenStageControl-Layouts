@@ -3,13 +3,28 @@ const reaperHost = '127.0.0.1'
 const reaperPort = 8000
 const trackCount = 32
 const surfaceCount = 8
+const scrubRepeatMs = 50
 let firstSlot = null
 let selectedSlot = null
 let tracks = {}
+let scrubTimer = null
 
 function notify(message) {
     console.warn('Wing REAPER follow:', message)
     receive('/NOTIFY', '^warning', message)
+}
+
+function stopScrub() {
+    if (scrubTimer === null) return
+    clearInterval(scrubTimer)
+    scrubTimer = null
+}
+
+function startScrub(direction) {
+    stopScrub()
+    scrubTimer = setInterval(() => {
+        send(reaperHost, reaperPort, '/scrub', {type: 'f', value: direction})
+    }, scrubRepeatMs)
 }
 
 function renderSlot(slot, changed) {
@@ -41,6 +56,7 @@ function requestRefresh() {
 }
 
 function configure() {
+    stopScrub()
     firstSlot = null
     selectedSlot = null
     tracks = {}
@@ -60,6 +76,7 @@ module.exports = {
     reload: configure,
 
     stop: function() {
+        stopScrub()
         send(reaperHost, reaperPort, '/device/track/count', {type: 'i', value: 8})
         send(reaperHost, reaperPort, '/device/track/bank/follows/mixer')
         requestRefresh()
@@ -95,6 +112,12 @@ module.exports = {
 
     oscOutFilter: function(data) {
         if (data.host !== reaperHost || Number(data.port) !== reaperPort) return data
+        if (data.address === '/scrub') {
+            const direction = data.args[0] && data.args[0].value
+            if (direction === 0) stopScrub()
+            else if (direction === -1 || direction === 1) startScrub(direction)
+            return data
+        }
         if (data.address === '/device/track/bank/-' || data.address === '/device/track/bank/+') {
             if (data.args.length && !data.args[0].value) return
             if (firstSlot === null) {
