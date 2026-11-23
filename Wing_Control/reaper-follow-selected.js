@@ -4,6 +4,7 @@ const reaperPort = 8000
 const trackCount = 32
 const surfaceCount = 8
 const scrubRepeatMs = 50
+const transportTriggers = new Set(['/repeat', '/record', '/stop', '/play'])
 let firstSlot = null
 let selectedSlot = null
 let tracks = {}
@@ -117,6 +118,13 @@ module.exports = {
             if (direction === 0) stopScrub()
             else if (direction === -1 || direction === 1) startScrub(direction)
             return data
+        }
+        if (transportTriggers.has(data.address)) {
+            const value = data.args[0] && data.args[0].value
+            if (!data.args.length || value === 1) {
+                send(reaperHost, reaperPort, data.address)
+            }
+            return
         }
         if (data.address === '/device/track/bank/-' || data.address === '/device/track/bank/+') {
             if (data.args.length && !data.args[0].value) return

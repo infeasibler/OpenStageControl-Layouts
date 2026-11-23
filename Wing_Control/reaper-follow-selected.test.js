@@ -199,3 +199,36 @@ test('scrub repeats while held and stops on release or module stop', () => {
     router.stop()
     assert.equal(intervals[1].cleared, true)
 })
+
+test('transport controls send one no-argument trigger on press', () => {
+    const {outgoing, sent} = setup()
+    for (const address of ['/repeat', '/record', '/stop', '/play']) {
+        assert.equal(outgoing(address, 1), undefined)
+        const messages = sent.filter(args => args[2] === address)
+        assert.equal(messages.length, 1)
+        assert.equal(messages[0].length, 3)
+
+        assert.equal(outgoing(address, 0), undefined)
+        assert.equal(sent.filter(args => args[2] === address).length, 1)
+    }
+})
+
+test('smaller W-Control named transport buttons trigger the configured REAPER actions', () => {
+    const layout = JSON.parse(fs.readFileSync(path.join(__dirname, 'wControl-smaller.json'), 'utf8'))
+    const widgets = layout.content.widgets[0].widgets
+    for (const [id, address, left, top] of [
+        ['loop', '/repeat', 826, 530],
+        ['record', '/record', 908, 530],
+        ['stop', '/stop', 826, 594],
+        ['play', '/play', 908, 594]
+    ]) {
+        const button = widgets.find(widget => widget.id === id)
+        assert.equal(button.type, 'button')
+        assert.equal(button.interaction, true)
+        assert.equal(button.address, address)
+        assert.equal(button.mode, 'toggle')
+        assert.equal(button.on, 1)
+        assert.ok(button.css.includes(`left: calc(var(--leftOffset) + ${left}px);`))
+        assert.ok(button.css.includes(`top: calc(var(--topOffset) + ${top}px);`))
+    }
+})
