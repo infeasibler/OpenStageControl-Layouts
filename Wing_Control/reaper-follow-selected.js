@@ -4,7 +4,10 @@ const reaperPort = 8000
 const trackCount = 32
 const surfaceCount = 8
 const scrubRepeatMs = 50
-const transportTriggers = new Set(['/repeat', '/record', '/stop', '/play'])
+// 41041 targets the current bar start; 41040 targets the next bar start.
+const transportTriggers = new Set([
+    '/repeat', '/record', '/stop', '/play', '/action/41041', '/action/41040'
+])
 let firstSlot = null
 let selectedSlot = null
 let tracks = {}

@@ -7,6 +7,8 @@ move the surface window by one slot; selecting another track follows it again.
 The first button row controls mute and the second controls solo for each track.
 The eight knobs above them control pan.
 The transport arrow buttons scrub backward or forward while held.
+The A/B buttons align to bar starts: back selects the current bar start (then
+the previous bar if already aligned); forward selects the next bar start.
 The transport panel buttons toggle loop and record, and trigger stop and play.
 
 1. In REAPER, use the `Fire` OSC profile with Open Stage Control sending to

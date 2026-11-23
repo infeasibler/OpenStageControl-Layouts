@@ -164,7 +164,26 @@ test('the first eight knobs use normalized pan addresses', () => {
     }
 })
 
-test('smaller W-Control arrow buttons scrub while pressed', () => {
+test('smaller W-Control bar buttons move one measure', () => {
+    const layout = JSON.parse(fs.readFileSync(path.join(__dirname, 'wControl-smaller.json'), 'utf8'))
+    const widgets = layout.content.widgets[0].widgets
+    for (const [id, address, left] of [
+        ['bar_backward', '/action/41041', 826],
+        ['bar_forward', '/action/41040', 908]
+    ]) {
+        const button = widgets.find(widget => widget.id === id)
+        assert.equal(button.type, 'button')
+        assert.equal(button.interaction, true)
+        assert.equal(button.address, address)
+        assert.equal(button.mode, 'push')
+        assert.equal(button.on, 1)
+        assert.equal(button.off, 0)
+        assert.ok(button.css.includes(`left: calc(var(--leftOffset) + ${left}px);`))
+        assert.ok(button.css.includes('top: calc(var(--topOffset) + 664px);'))
+    }
+})
+
+test('smaller W-Control scrub buttons retain held scrubbing', () => {
     const layout = JSON.parse(fs.readFileSync(path.join(__dirname, 'wControl-smaller.json'), 'utf8'))
     const widgets = layout.content.widgets[0].widgets
     for (const [id, direction, left] of [
@@ -200,9 +219,11 @@ test('scrub repeats while held and stops on release or module stop', () => {
     assert.equal(intervals[1].cleared, true)
 })
 
-test('transport controls send one no-argument trigger on press', () => {
+test('transport and measure controls send one no-argument trigger on press', () => {
     const {outgoing, sent} = setup()
-    for (const address of ['/repeat', '/record', '/stop', '/play']) {
+    for (const address of [
+        '/repeat', '/record', '/stop', '/play', '/action/41041', '/action/41040'
+    ]) {
         assert.equal(outgoing(address, 1), undefined)
         const messages = sent.filter(args => args[2] === address)
         assert.equal(messages.length, 1)
