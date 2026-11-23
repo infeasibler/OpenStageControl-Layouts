@@ -5,6 +5,7 @@ the first fader follow the track selected in REAPER. It does not scroll the
 Mixer. The other seven faders follow the subsequent OSC track slots. Bank -/+
 move the surface window by one slot; selecting another track follows it again.
 The first button row controls mute and the second controls solo for each track.
+The eight knobs above them control pan.
 
 1. In REAPER, use the `Fire` OSC profile with Open Stage Control sending to
    `127.0.0.1:8000` and listening on port `9000`.

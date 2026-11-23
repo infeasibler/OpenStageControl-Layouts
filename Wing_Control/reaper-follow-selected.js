@@ -15,12 +15,15 @@ function notify(message) {
 function renderSlot(slot, changed) {
     const trackIndex = firstSlot === null ? null : firstSlot + slot - 1
     const track = tracks[trackIndex]
-    const ready = track && track.name !== undefined && track.volume !== undefined
+    const ready = track && track.name !== undefined && track.volume !== undefined && track.pan !== undefined
     const buttonsReady = track && track.mute !== undefined && track.solo !== undefined
     receive(`/track/${slot}/name`, trackIndex > trackCount ? 'Out of range' :
         ready && buttonsReady ? track.name : 'Waiting')
-    if (ready && (!changed || changed === 'volume')) {
+    if (track && track.name !== undefined && track.volume !== undefined && (!changed || changed === 'volume')) {
         receive(`/track/${slot}/volume`, track.volume)
+    }
+    if (track && track.pan !== undefined && (!changed || changed === 'pan')) {
+        receive(`/track/${slot}/pan`, track.pan)
     }
     for (const property of ['mute', 'solo']) {
         if (!changed || changed === property) {
@@ -64,7 +67,7 @@ module.exports = {
 
     oscInFilter: function(data) {
         if (data.host !== reaperHost) return data
-        const match = /^\/track\/(\d+)\/(name|volume|mute|solo|select)$/.exec(data.address)
+        const match = /^\/track\/(\d+)\/(name|volume|pan|mute|solo|select)$/.exec(data.address)
         if (!match) return data
         const index = Number(match[1])
         if (index < 1 || index > trackCount || !data.args.length) return data
@@ -104,7 +107,7 @@ module.exports = {
             return
         }
 
-        const match = /^\/track\/([1-8])\/(volume|mute|solo)$/.exec(data.address)
+        const match = /^\/track\/([1-8])\/(volume|pan|mute|solo)$/.exec(data.address)
         if (!match) return data
         const index = firstSlot === null ? null : firstSlot + Number(match[1]) - 1
         const property = match[2]

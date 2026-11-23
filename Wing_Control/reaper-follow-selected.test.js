@@ -32,10 +32,12 @@ test('selecting a track maps the surface to that track and following tracks', ()
     assert.ok(sent.some(args => args[2] === '/device/track/count' && args[3].value === 32))
     incoming('/track/7/name', 'Vocals')
     incoming('/track/7/volume', 0.5)
+    incoming('/track/7/pan', 0.5)
     incoming('/track/7/mute', 0)
     incoming('/track/7/solo', 0)
     incoming('/track/8/name', 'Guitar')
     incoming('/track/8/volume', 0.7)
+    incoming('/track/8/pan', 0.5)
     incoming('/track/8/mute', 0)
     incoming('/track/8/solo', 0)
     incoming('/track/7/select', 1)
@@ -112,5 +114,45 @@ test('the first two rows address the eight mute and solo controls', () => {
             assert.equal(button.address, `/track/${slot}/${property}`)
             assert.equal(button.mode, 'toggle')
         }
+    }
+})
+
+test('pan follows selection and bank shifts in both directions', () => {
+    const {incoming, outgoing, received} = setup()
+    for (const [index, pan] of [[7, 0], [8, 1]]) {
+        incoming(`/track/${index}/name`, `Track ${index}`)
+        incoming(`/track/${index}/pan`, pan)
+    }
+    incoming('/track/7/select', 1)
+    assert.ok(received.some(args => args[0] === '/track/1/pan' && args[1] === 0))
+    assert.ok(received.some(args => args[0] === '/track/2/pan' && args[1] === 1))
+    const message = outgoing('/track/1/pan', 0.5)
+    assert.equal(message.address, '/track/7/pan')
+    assert.equal(message.args[0].value, 0.5)
+    outgoing('/device/track/bank/+')
+    assert.equal(outgoing('/track/1/pan', 1).address, '/track/8/pan')
+    incoming('/track/8/pan', 0.5)
+    assert.equal(received.filter(args => args[0] === '/track/1/pan').at(-1)[1], 0.5)
+})
+
+test('pan is blocked without feedback and outside the supported window', () => {
+    const {incoming, outgoing, received} = setup()
+    incoming('/track/32/name', 'Last')
+    incoming('/track/32/select', 1)
+    assert.equal(outgoing('/track/1/pan', 0.5), undefined)
+    assert.ok(received.some(args => args[0] === '/NOTIFY'))
+    incoming('/track/32/pan', 0.5)
+    assert.equal(outgoing('/track/1/pan', 0.5).address, '/track/32/pan')
+    assert.equal(outgoing('/track/2/pan', 0.5), undefined)
+})
+
+test('the first eight knobs use normalized pan addresses', () => {
+    const layout = JSON.parse(fs.readFileSync(path.join(__dirname, 'wControl-smaller.json'), 'utf8'))
+    const widgets = layout.content.widgets[0].widgets
+    for (let slot = 1; slot <= 8; slot++) {
+        const knob = widgets.find(widget => widget.id === `knob_${slot}`)
+        assert.equal(knob.address, `/track/${slot}/pan`)
+        assert.equal(knob.range.min, 0)
+        assert.equal(knob.range.max, 1)
     }
 })
