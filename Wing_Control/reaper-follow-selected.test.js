@@ -20,8 +20,8 @@ function setup() {
     const incoming = (address, value) => router.oscInFilter({
         host: '127.0.0.1', address, args: [{value}]
     })
-    const outgoing = address => router.oscOutFilter({
-        host: '127.0.0.1', port: 8000, address, args: [{value: 1}]
+    const outgoing = (address, value = 1) => router.oscOutFilter({
+        host: '127.0.0.1', port: 8000, address, args: [{value}]
     })
     return {router, sent, received, callbacks, incoming, outgoing}
 }
@@ -32,8 +32,12 @@ test('selecting a track maps the surface to that track and following tracks', ()
     assert.ok(sent.some(args => args[2] === '/device/track/count' && args[3].value === 32))
     incoming('/track/7/name', 'Vocals')
     incoming('/track/7/volume', 0.5)
+    incoming('/track/7/mute', 0)
+    incoming('/track/7/solo', 0)
     incoming('/track/8/name', 'Guitar')
     incoming('/track/8/volume', 0.7)
+    incoming('/track/8/mute', 0)
+    incoming('/track/8/solo', 0)
     incoming('/track/7/select', 1)
     assert.ok(received.some(args => args[0] === '/track/1/name' && args[1] === 'Vocals'))
     assert.ok(received.some(args => args[0] === '/track/2/volume' && args[1] === 0.7))
@@ -65,4 +69,48 @@ test('missing selection and out-of-range or uninitialized tracks block fader mes
     assert.ok(received.some(args => args[0] === '/track/2/name' && args[1] === 'Out of range'))
     incoming('/track/32/select', 0)
     assert.equal(outgoing('/track/1/volume'), undefined)
+})
+
+test('mute and solo follow selection and one-track bank shifts in both directions', () => {
+    const {incoming, outgoing, received} = setup()
+    for (const [index, mute, solo] of [[7, 1, 0], [8, 0, 1]]) {
+        incoming(`/track/${index}/name`, `Track ${index}`)
+        incoming(`/track/${index}/volume`, 0.5)
+        incoming(`/track/${index}/mute`, mute)
+        incoming(`/track/${index}/solo`, solo)
+    }
+    incoming('/track/7/select', 1)
+    assert.ok(received.some(args => args[0] === '/track/1/mute' && args[1] === 1))
+    assert.ok(received.some(args => args[0] === '/track/2/solo' && args[1] === 1))
+    assert.equal(outgoing('/track/1/mute', 0).address, '/track/7/mute')
+    assert.equal(outgoing('/track/2/solo', 1).address, '/track/8/solo')
+    outgoing('/device/track/bank/+')
+    assert.equal(outgoing('/track/1/solo', 0).address, '/track/8/solo')
+    incoming('/track/8/solo', 0)
+    assert.equal(received.filter(args => args[0] === '/track/1/solo').at(-1)[1], 0)
+})
+
+test('mute and solo commands are blocked until their own feedback arrives', () => {
+    const {incoming, outgoing, received} = setup()
+    incoming('/track/7/name', 'Vocals')
+    incoming('/track/7/volume', 0.5)
+    incoming('/track/7/select', 1)
+    assert.equal(outgoing('/track/1/mute'), undefined)
+    assert.equal(outgoing('/track/1/solo'), undefined)
+    assert.ok(received.some(args => args[0] === '/NOTIFY'))
+    incoming('/track/7/mute', 0)
+    assert.equal(outgoing('/track/1/mute').address, '/track/7/mute')
+    assert.equal(outgoing('/track/1/solo'), undefined)
+})
+
+test('the first two rows address the eight mute and solo controls', () => {
+    const layout = JSON.parse(fs.readFileSync(path.join(__dirname, 'wControl-smaller.json'), 'utf8'))
+    const widgets = layout.content.widgets[0].widgets
+    for (let slot = 1; slot <= 8; slot++) {
+        for (const [offset, property] of [[0, 'mute'], [8, 'solo']]) {
+            const button = widgets.find(widget => widget.id === `button_${slot + offset}`)
+            assert.equal(button.address, `/track/${slot}/${property}`)
+            assert.equal(button.mode, 'toggle')
+        }
+    }
 })

@@ -4,15 +4,16 @@ The optional `reaper-follow-selected.js` Open Stage Control custom module makes
 the first fader follow the track selected in REAPER. It does not scroll the
 Mixer. The other seven faders follow the subsequent OSC track slots. Bank -/+
 move the surface window by one slot; selecting another track follows it again.
+The first button row controls mute and the second controls solo for each track.
 
 1. In REAPER, use the `Fire` OSC profile with Open Stage Control sending to
    `127.0.0.1:8000` and listening on port `9000`.
 2. In the Open Stage Control launcher, set **Custom module** to
    `reaper-follow-selected.js` in this folder, then start the server and load
    `wControl-smaller.json`.
-3. Select a track in REAPER. Wait for its track names and fader positions to
-   arrive before using the faders. A `Waiting` label means feedback has not
-   arrived; fader messages for that slot are blocked.
+3. Select a track in REAPER. Wait for its track names and control states to
+   arrive before using the controls. A `Waiting` label means feedback has not
+   arrived; messages for an uninitialized control are blocked.
 
 The module temporarily requests a 32-track OSC window and disables
 Mixer-follow for that device. It uses REAPER action 41743 to refresh feedback,

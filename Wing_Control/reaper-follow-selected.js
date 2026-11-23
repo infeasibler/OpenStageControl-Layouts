@@ -12,15 +12,21 @@ function notify(message) {
     receive('/NOTIFY', '^warning', message)
 }
 
-function renderSlot(slot) {
+function renderSlot(slot, changed) {
     const trackIndex = firstSlot === null ? null : firstSlot + slot - 1
     const track = tracks[trackIndex]
-    if (!track || track.name === undefined || track.volume === undefined) {
-        receive(`/track/${slot}/name`, trackIndex > trackCount ? 'Out of range' : 'Waiting')
-        return
+    const ready = track && track.name !== undefined && track.volume !== undefined
+    const buttonsReady = track && track.mute !== undefined && track.solo !== undefined
+    receive(`/track/${slot}/name`, trackIndex > trackCount ? 'Out of range' :
+        ready && buttonsReady ? track.name : 'Waiting')
+    if (ready && (!changed || changed === 'volume')) {
+        receive(`/track/${slot}/volume`, track.volume)
     }
-    receive(`/track/${slot}/name`, track.name)
-    receive(`/track/${slot}/volume`, track.volume)
+    for (const property of ['mute', 'solo']) {
+        if (!changed || changed === property) {
+            receive(`/track/${slot}/${property}`, track && track[property] !== undefined ? track[property] : 0)
+        }
+    }
 }
 
 function renderWindow() {
@@ -58,7 +64,7 @@ module.exports = {
 
     oscInFilter: function(data) {
         if (data.host !== reaperHost) return data
-        const match = /^\/track\/(\d+)\/(name|volume|select)$/.exec(data.address)
+        const match = /^\/track\/(\d+)\/(name|volume|mute|solo|select)$/.exec(data.address)
         if (!match) return data
         const index = Number(match[1])
         if (index < 1 || index > trackCount || !data.args.length) return data
@@ -81,7 +87,7 @@ module.exports = {
         if (!tracks[index]) tracks[index] = {}
         tracks[index][property] = value
         const slot = firstSlot === null ? 0 : index - firstSlot + 1
-        if (slot >= 1 && slot <= surfaceCount) renderSlot(slot)
+        if (slot >= 1 && slot <= surfaceCount) renderSlot(slot, property)
     },
 
     oscOutFilter: function(data) {
@@ -98,14 +104,16 @@ module.exports = {
             return
         }
 
-        const match = /^\/track\/([1-8])\/volume$/.exec(data.address)
+        const match = /^\/track\/([1-8])\/(volume|mute|solo)$/.exec(data.address)
         if (!match) return data
         const index = firstSlot === null ? null : firstSlot + Number(match[1]) - 1
+        const property = match[2]
         const track = tracks[index]
-        if (!track || track.name === undefined || track.volume === undefined) {
-            notify('Track feedback is not available; the fader message was not sent.')
+        if (!track || track.name === undefined || track[property] === undefined) {
+            if (property !== 'volume') renderSlot(Number(match[1]))
+            notify(`Track ${property} feedback is not available; the message was not sent.`)
             return
         }
-        return {...data, address: `/track/${index}/volume`}
+        return {...data, address: `/track/${index}/${property}`}
     }
 }
