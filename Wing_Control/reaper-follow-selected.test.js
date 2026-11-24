@@ -30,7 +30,12 @@ function setup() {
     const outgoing = (address, value = 1) => router.oscOutFilter({
         host: '127.0.0.1', port: 8000, address, args: [{value}]
     })
-    return {router, sent, received, callbacks, incoming, outgoing, intervals}
+    const setVisibleTracks = (indexes, selectedTrack = 0) => router.oscInFilter({
+        host: '127.0.0.1',
+        address: '/wcontrol/track_state',
+        args: [{value: indexes.join(',')}, {value: selectedTrack}]
+    })
+    return {router, sent, received, callbacks, incoming, outgoing, intervals, setVisibleTracks}
 }
 
 test('selecting a track maps the surface to that track and following tracks', () => {
@@ -52,6 +57,66 @@ test('selecting a track maps the surface to that track and following tracks', ()
     assert.ok(received.some(args => args[0] === '/track/2/volume' && args[1] === 0.7))
     assert.equal(outgoing('/track/1/volume').address, '/track/7/volume')
     assert.equal(outgoing('/track/2/volume').address, '/track/8/volume')
+})
+
+test('collapsed-folder children are skipped and the bank follows visible track order', () => {
+    const {router, incoming, outgoing, received, setVisibleTracks} = setup()
+    router.init()
+    setVisibleTracks([1, 3, 4, 5, 6, 7, 8, 9])
+    for (const index of [1, 2, 3, 4]) {
+        incoming(`/track/${index}/name`, `Track ${index}`)
+        incoming(`/track/${index}/volume`, 0.5)
+        incoming(`/track/${index}/pan`, 0.5)
+        incoming(`/track/${index}/mute`, 0)
+        incoming(`/track/${index}/solo`, 0)
+    }
+
+    incoming('/track/3/select', 1)
+    assert.ok(received.some(args => args[0] === '/track/1/name' && args[1] === 'Track 3'))
+    assert.ok(received.some(args => args[0] === '/track/2/name' && args[1] === 'Track 4'))
+    assert.equal(outgoing('/track/2/volume').address, '/track/4/volume')
+
+    outgoing('/device/track/bank/+')
+    assert.equal(outgoing('/track/1/volume').address, '/track/4/volume')
+    setVisibleTracks([1, 4, 5, 6, 7, 8, 9])
+    assert.equal(outgoing('/track/1/volume').address, '/track/4/volume')
+    incoming('/track/2/select', 1)
+    assert.equal(outgoing('/track/1/volume').address, '/track/4/volume')
+})
+
+test('hiding the selected track clears the surface mapping', () => {
+    const {router, incoming, outgoing, received, setVisibleTracks} = setup()
+    router.init()
+    setVisibleTracks([1, 2, 3])
+    incoming('/track/2/name', 'Folder child')
+    incoming('/track/2/volume', 0.5)
+    incoming('/track/2/pan', 0.5)
+    incoming('/track/2/mute', 0)
+    incoming('/track/2/solo', 0)
+    incoming('/track/2/select', 1)
+
+    setVisibleTracks([1, 3])
+    assert.equal(outgoing('/track/1/volume'), undefined)
+    assert.ok(received.some(args => args[0] === '/track/1/name' && args[1] === 'Waiting'))
+})
+
+test('collapsing tracks before the selected track keeps the surface anchored to it', () => {
+    const {router, incoming, outgoing, setVisibleTracks} = setup()
+    router.init()
+    for (let index = 1; index <= 10; index++) {
+        incoming(`/track/${index}/name`, `Track ${index}`)
+        incoming(`/track/${index}/volume`, index / 10)
+        incoming(`/track/${index}/pan`, 0.5)
+        incoming(`/track/${index}/mute`, 0)
+        incoming(`/track/${index}/solo`, 0)
+    }
+
+    incoming('/track/8/select', 1)
+    assert.equal(outgoing('/track/1/volume').address, '/track/8/volume')
+    setVisibleTracks([1, 2, 3, 4, 5, 8, 9, 10], 8)
+
+    assert.equal(outgoing('/track/1/volume').address, '/track/8/volume')
+    assert.equal(outgoing('/track/2/volume').address, '/track/9/volume')
 })
 
 test('bank buttons shift one track and a later selection follows again', () => {
